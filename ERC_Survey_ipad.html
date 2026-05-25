@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>During Driving — Event Rating</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --normal-bg: #D8F3DC; --normal: #2D6A4F;
+    --slight-bg: #FEF3C7; --slight: #B45309;
+    --severe-bg: #FEE2E2; --severe: #9B1C1C;
+    --confirm-bg: #DBEAFE; --confirm: #1e3a5f;
+    --back-bg: #F3F4F6; --back: #374151;
+    --yes-bg: #D1FAE5; --yes: #065F46;
+    --no-bg: #FEE2E2; --no: #991B1B;
+    --perception-bg: #DBEAFE; --perception: #1e40af;
+    --decision-bg: #F3E8FF; --decision: #6b21a8;
+    --operation-bg: #FEF3C7; --operation: #92400e;
+  }
+
+  body {
+    background: #000;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  .screen {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  .screen.active { display: flex; }
+
+  .card {
+    background: #fff;
+    border-radius: 28px;
+    padding: 44px 40px;
+    width: min(540px, 88vw);
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .step-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #9CA3AF;
+    text-align: center;
+  }
+
+  .event-info {
+    text-align: center;
+    font-size: 15px;
+    color: #6B7280;
+  }
+  .event-info strong { color: #111; font-weight: 700; }
+
+  .btn-group { display: flex; flex-direction: column; gap: 14px; }
+
+  .big-btn {
+    border: none;
+    border-radius: 18px;
+    padding: 26px 20px;
+    font-size: 26px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    width: 100%;
+    outline: none;
+    display: block;
+    text-align: center;
+    -webkit-appearance: none;
+    appearance: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .big-btn:active { opacity: 0.75; transform: scale(0.97); }
+
+  .btn-normal  { background: var(--normal-bg);  color: var(--normal); }
+  .btn-slight  { background: var(--slight-bg);  color: var(--slight); }
+  .btn-severe  { background: var(--severe-bg);  color: var(--severe); }
+  .btn-confirm { background: var(--confirm-bg); color: var(--confirm); font-size: 20px; font-weight: 700; }
+  .btn-back    { background: var(--back-bg);    color: var(--back);   font-size: 20px; font-weight: 600; }
+  .btn-yes     { background: var(--yes-bg);     color: var(--yes); }
+  .btn-no      { background: var(--no-bg);      color: var(--no); }
+
+  .comfort-q {
+    font-size: 21px;
+    font-weight: 600;
+    color: #111;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  .confirm-row { display: flex; gap: 14px; }
+  .confirm-row .big-btn { flex: 1; padding: 22px 10px; }
+
+  .error-q {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111;
+    text-align: center;
+  }
+
+  .error-btn {
+    border: 2.5px solid transparent;
+    border-radius: 16px;
+    padding: 18px 18px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    touch-action: manipulation;
+  }
+  .error-btn:active { opacity: 0.75; }
+
+  .error-btn .err-text { display: flex; flex-direction: column; gap: 3px; }
+  .error-btn .err-label { font-size: 16px; font-weight: 700; }
+  .error-btn .err-desc  { font-size: 13px; font-weight: 400; line-height: 1.4; }
+
+  .error-btn.perception { background: var(--perception-bg); color: var(--perception); }
+  .error-btn.decision   { background: var(--decision-bg);   color: var(--decision); }
+  .error-btn.operation  { background: var(--operation-bg);  color: var(--operation); }
+
+  .error-btn.selected.perception { border-color: var(--perception); }
+  .error-btn.selected.decision   { border-color: var(--decision); }
+  .error-btn.selected.operation  { border-color: var(--operation); }
+
+  .checkmark {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* standby dot */
+  #screen-standby { background: #000; cursor: default; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #222; animation: pulse 2.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:.2} 50%{opacity:.7} }
+
+  /* done screen */
+  #screen-done { background: #000; overflow-y: auto; align-items: flex-start; padding: 60px 20px 100px; }
+  .done-card { background: #fff; border-radius: 24px; padding: 32px 28px; width: min(600px, 92vw); margin: 0 auto; }
+  .done-title { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 16px; }
+  .done-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .done-table th { text-align: left; color: #9CA3AF; font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 6px; }
+  .done-table td { padding: 9px 6px; color: #111; border-top: 1px solid #F3F4F6; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .badge-normal { background: var(--normal-bg); color: var(--normal); }
+  .badge-slight { background: var(--slight-bg); color: var(--slight); }
+  .badge-severe { background: var(--severe-bg); color: var(--severe); }
+
+  /* experimenter panel */
+  #exp-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #111;
+    border-top: 1px solid #222;
+    padding: 12px 20px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 999;
+    flex-wrap: wrap;
+  }
+  #exp-panel label { color: #9CA3AF; font-size: 13px; white-space: nowrap; }
+  #exp-panel input[type=number] {
+    background: #1f1f1f; border: 1px solid #333; color: #fff;
+    border-radius: 8px; padding: 8px 10px; font-size: 14px;
+    font-family: inherit; width: 64px;
+    -webkit-appearance: none; appearance: none;
+  }
+  #btn-trigger {
+    margin-left: auto;
+    background: #2563EB; color: #fff;
+    border: none; border-radius: 10px;
+    padding: 10px 22px; font-size: 15px; font-weight: 700;
+    font-family: inherit; cursor: pointer;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+  }
+  #btn-export {
+    background: #065F46; color: #fff;
+    border: none; border-radius: 10px;
+    padding: 10px 18px; font-size: 15px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="screen active" id="screen-standby">
+  <div class="dot"></div>
+</div>
+
+<div class="screen" id="screen-severity">
+  <div class="card">
+    <div class="step-label">Step 1 of 2 &nbsp;·&nbsp; Severity</div>
+    <div class="event-info">Scenario <strong id="s1-sc">—</strong> &nbsp;/&nbsp; Event <strong id="s1-ev">—</strong></div>
+    <div class="btn-group">
+      <button class="big-btn btn-normal"  id="btn-normal">Normal</button>
+      <button class="big-btn btn-slight"  id="btn-slight">Slight</button>
+      <button class="big-btn btn-severe"  id="btn-severe">Severe</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-comfort">
+  <div class="card">
+    <div class="step-label">Step 2 of 2 &nbsp;·&nbsp; Response</div>
+    <div class="comfort-q">Were you able to respond to this situation comfortably?</div>
+    <div class="btn-group">
+      <button class="big-btn btn-yes" id="btn-yes">Yes</button>
+      <button class="big-btn btn-no"  id="btn-no">No</button>
+    </div>
+    <div class="confirm-row">
+      <button class="big-btn btn-back" id="btn-back-comfort">← Back</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-error">
+  <div class="card">
+    <div class="step-label">What made it difficult?</div>
+    <div class="error-q">Select all that apply</div>
+    <div class="btn-group">
+      <button class="error-btn perception" id="err-perception">
+        <div class="err-text">
+          <span class="err-label">Perception</span>
+          <span class="err-desc">I didn't see it coming</span>
+        </div>
+        <div class="checkmark" id="chk-perception"></div>
+      </button>
+      <button class="error-btn decision" id="err-decision">
+        <div class="err-text">
+          <span class="err-label">Decision</span>
+          <span class="err-desc">I didn't know what to do</span>
+        </div>
+        <div class="checkmark" id="chk-decision"></div>
+      </button>
+      <button class="error-btn operation" id="err-operation">
+        <div class="err-text">
+          <span class="err-label">Operation</span>
+          <span class="err-desc">I knew what to do but couldn't do it in time</span>
+        </div>
+        <div class="checkmark" id="chk-operation"></div>
+      </button>
+    </div>
+    <div class="confirm-row">
+      <button class="big-btn btn-back"    id="btn-back-error">← Back</button>
+      <button class="big-btn btn-confirm" id="btn-confirm-error">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-confirm">
+  <div class="card">
+    <div class="step-label">Confirm response</div>
+    <div class="event-info">Scenario <strong id="s2-sc">—</strong> &nbsp;/&nbsp; Event <strong id="s2-ev">—</strong></div>
+    <div style="text-align:center; font-size:20px; font-weight:600; color:#111;" id="confirm-summary"></div>
+    <div class="confirm-row">
+      <button class="big-btn btn-back"    id="btn-back-confirm">← Back</button>
+      <button class="big-btn btn-confirm" id="btn-confirm-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-done">
+  <div class="done-card">
+    <div class="done-title">Recorded responses</div>
+    <table class="done-table">
+      <thead>
+        <tr><th>Sc.</th><th>Ev.</th><th>Severity</th><th>Comfortable</th><th>Error type</th><th>Time</th></tr>
+      </thead>
+      <tbody id="done-tbody"></tbody>
+    </table>
+    <div style="margin-top:20px;">
+      <button class="big-btn btn-back" id="btn-done-back" style="font-size:16px; padding:14px;">← Back to standby</button>
+    </div>
+  </div>
+</div>
+
+<div id="exp-panel">
+  <label>Scenario</label>
+  <input type="number" id="inp-scenario" value="1" min="1" max="99">
+  <label>Event</label>
+  <input type="number" id="inp-event" value="1" min="1" max="99">
+  <button id="btn-trigger">▶ Trigger event</button>
+  <button id="btn-export">Export CSV</button>
+</div>
+
+<script>
+  var state = { scenario: 1, event: 1, severity: null, comfortable: null, errors: { perception: false, decision: false, operation: false } };
+  var log = [];
+
+  function showScreen(id) {
+    var screens = document.querySelectorAll('.screen');
+    for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active');
+    document.getElementById('screen-' + id).classList.add('active');
+  }
+
+  function resetErrors() {
+    state.errors = { perception: false, decision: false, operation: false };
+    ['perception','decision','operation'].forEach(function(t) {
+      document.getElementById('err-' + t).classList.remove('selected');
+      document.getElementById('chk-' + t).textContent = '';
+    });
+  }
+
+  function toggleError(type) {
+    state.errors[type] = !state.errors[type];
+    var btn = document.getElementById('err-' + type);
+    var chk = document.getElementById('chk-' + type);
+    if (state.errors[type]) { btn.classList.add('selected'); chk.textContent = '✓'; }
+    else { btn.classList.remove('selected'); chk.textContent = ''; }
+  }
+
+  function confirmEntry() {
+    var ts = new Date().toISOString();
+    var errorTypes = Object.keys(state.errors).filter(function(k){ return state.errors[k]; }).join('+') || '—';
+    log.push({
+      scenario: state.scenario, event: state.event,
+      severity: state.severity,
+      comfortable: state.comfortable ? 'Yes' : 'No',
+      errors: state.comfortable ? '—' : errorTypes,
+      timestamp: ts
+    });
+    updateTable();
+    showScreen('standby');
+  }
+
+  function updateTable() {
+    var tbody = document.getElementById('done-tbody');
+    tbody.innerHTML = log.map(function(r) {
+      return '<tr>' +
+        '<td>' + r.scenario + '</td>' +
+        '<td>' + r.event + '</td>' +
+        '<td><span class="badge badge-' + r.severity.toLowerCase() + '">' + r.severity + '</span></td>' +
+        '<td>' + r.comfortable + '</td>' +
+        '<td style="color:#6B7280;">' + r.errors + '</td>' +
+        '<td style="color:#9CA3AF;">' + r.timestamp.slice(11,19) + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function exportCSV() {
+    if (log.length === 0) { alert('No data recorded yet.'); return; }
+    var rows = ['Scenario,Event,Severity,Comfortable,ErrorType,Timestamp'];
+    log.forEach(function(r) {
+      rows.push([r.scenario, r.event, r.severity, r.comfortable, r.errors, r.timestamp].join(','));
+    });
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'driving_events.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Wire up all buttons
+  document.getElementById('btn-trigger').addEventListener('touchend', function(e) {
+    e.preventDefault();
+    state.scenario = parseInt(document.getElementById('inp-scenario').value) || 1;
+    state.event    = parseInt(document.getElementById('inp-event').value) || 1;
+    state.severity = null; state.comfortable = null;
+    resetErrors();
+    document.getElementById('s1-sc').textContent = state.scenario;
+    document.getElementById('s1-ev').textContent = state.event;
+    showScreen('severity');
+    var ev = parseInt(document.getElementById('inp-event').value) || 1;
+    document.getElementById('inp-event').value = ev + 1;
+  });
+  document.getElementById('btn-trigger').addEventListener('click', function() {
+    state.scenario = parseInt(document.getElementById('inp-scenario').value) || 1;
+    state.event    = parseInt(document.getElementById('inp-event').value) || 1;
+    state.severity = null; state.comfortable = null;
+    resetErrors();
+    document.getElementById('s1-sc').textContent = state.scenario;
+    document.getElementById('s1-ev').textContent = state.event;
+    showScreen('severity');
+    var ev = parseInt(document.getElementById('inp-event').value) || 1;
+    document.getElementById('inp-event').value = ev + 1;
+  });
+
+  function addTap(id, fn) {
+    var el = document.getElementById(id);
+    el.addEventListener('touchend', function(e) { e.preventDefault(); fn(); });
+    el.addEventListener('click', fn);
+  }
+
+  addTap('btn-normal', function() { state.severity = 'Normal'; goToComfort(); });
+  addTap('btn-slight', function() { state.severity = 'Slight'; goToComfort(); });
+  addTap('btn-severe', function() { state.severity = 'Severe'; goToComfort(); });
+
+  function goToComfort() {
+    document.getElementById('s2-sc').textContent = state.scenario;
+    document.getElementById('s2-ev').textContent = state.event;
+    showScreen('comfort');
+  }
+
+  addTap('btn-yes', function() {
+    state.comfortable = true;
+    document.getElementById('confirm-summary').textContent = state.severity + ' · Responded comfortably';
+    showScreen('confirm');
+  });
+  addTap('btn-no', function() { state.comfortable = false; showScreen('error'); });
+  addTap('btn-back-comfort', function() { showScreen('severity'); });
+
+  addTap('err-perception', function() { toggleError('perception'); });
+  addTap('err-decision',   function() { toggleError('decision'); });
+  addTap('err-operation',  function() { toggleError('operation'); });
+  addTap('btn-back-error', function() { showScreen('comfort'); });
+  addTap('btn-confirm-error', confirmEntry);
+
+  addTap('btn-back-confirm', function() { showScreen('comfort'); });
+  addTap('btn-confirm-yes', confirmEntry);
+
+  addTap('btn-done-back', function() { showScreen('standby'); });
+
+  document.getElementById('btn-export').addEventListener('touchend', function(e) { e.preventDefault(); exportCSV(); });
+  document.getElementById('btn-export').addEventListener('click', exportCSV);
+
+  // 5-tap on standby to view log
+  var tapCount = 0;
+  document.getElementById('screen-standby').addEventListener('touchend', function(e) {
+    e.preventDefault();
+    tapCount++;
+    if (tapCount >= 5) { tapCount = 0; updateTable(); showScreen('done'); }
+    setTimeout(function(){ tapCount = 0; }, 1500);
+  });
+  document.getElementById('screen-standby').addEventListener('click', function() {
+    tapCount++;
+    if (tapCount >= 5) { tapCount = 0; updateTable(); showScreen('done'); }
+    setTimeout(function(){ tapCount = 0; }, 1500);
+  });
+</script>
+</body>
+</html>
